@@ -36,55 +36,52 @@ def createJSON(tagmap,filename,args,onlyupdate):
         filterEmpty(tokens)
         if len(tokens) < 2:
             continue
-        charBuffer += "\"{}\":[".format(tokens[0])
+        charBuffer += f'\"{tokens[0]}\":['
         for t in range(1,len(tokens)):
      #      if len(tokens[t]) > 0:
-            charBuffer += "\"{}\"".format(tokens[t])
+            charBuffer += f'\"{tokens[t]}\"'
             if t < len(tokens)-1:
                 charBuffer += ","
-        if(n_line < map_last):
-            charBuffer += "],\n"
-            
+        if n_line >= map_last and onlyupdate:
+            charBuffer += "]\n}"
+            break
         else:
-            if onlyupdate:
-                charBuffer += "]\n}"
-                break
-            else:
-                charBuffer += "],\n"
+            charBuffer += "],\n"
         n_line += 1
     if not(onlyupdate):
-        charBuffer += "\"{}\":[".format(filename)
-        for t in range(0,len(args)):
-            charBuffer += "\"{}\"".format(args[t])
+        charBuffer += f'\"{filename}\":['
+        for t in range(len(args)):
+            charBuffer += f'\"{args[t]}\"'
             if t < len(args) - 1:
                 charBuffer += ","
         charBuffer += "]\n}"
-    
+
     with open("html_resources/tagmap.json","w") as json:
       print(charBuffer,file=json)
       print("wrote JSON\n")
        
 
 def searchFile(tagmap,name):
-    for line in tagmap:
-        if name in line:
-            return True
-    return False
+    return any(name in line for line in tagmap)
 
 def createNewFile(name,folder):
-    filesuffix = "{}/{}".format(folder,name)
-    text = "/* Source file https://github.com/MrOtherGuy/firefox-csshacks/tree/master/{} made available under Mozilla Public License v. 2.0\nSee the above repository for updates as well as full license text. */\n".format(filesuffix)
-    
+    filesuffix = f"{folder}/{name}"
+    text = f"/* Source file https://github.com/MrOtherGuy/firefox-csshacks/tree/master/{filesuffix} made available under Mozilla Public License v. 2.0\nSee the above repository for updates as well as full license text. */\n"
+
+
     if os.path.isfile(filesuffix):
-        confirm = input("File {} already exists! proceed (will overwrite) ? [y/N] ".format(filesuffix))
+        confirm = input(
+            f"File {filesuffix} already exists! proceed (will overwrite) ? [y/N] "
+        )
+
         if confirm != "y":
             print("Aborted")
             return False
-    
-    
+
+
     with open(filesuffix,"w") as css:
         print(text,file=css)
-        print("Created file: {}".format(filesuffix))
+        print(f"Created file: {filesuffix}")
         return True
 
 
@@ -96,8 +93,8 @@ class TaskMode:
             self.list_tags = False
             self.normal = False
         else:
-            self.update_only = (args[1] == "--update-only") or (args[1] == "-update-only") or (args[1] == "-u")
-            self.list_tags = (args[1] == "--list") or (args[1] == "-list") or (args[1] == "-l")
+            self.update_only = args[1] in ["--update-only", "-update-only", "-u"]
+            self.list_tags = args[1] in ["--list", "-list", "-l"]
             self.normal = not self.update_only and (not self.list_tags)
         self.min_arg_length = (3 if self.normal else 2) 
 
@@ -124,42 +121,35 @@ if __name__ == "__main__":
         print("usage: add_file.py <filename> <list_of_tags>")
         exit()
 
-    args = []
-    for i in range (2,(len(sys.argv))):
-        args.append(sys.argv[i])
-    
+    args = [sys.argv[i] for i in range (2,(len(sys.argv)))]
     name = sys.argv[1]
-    
+
     if not(runmode.update_only) and not(name.endswith(".css")):
         name += ".css"
     # For the moment files in content/ are not tagged, but the script can still create the css files
     folder = "content" if ("-content" in sys.argv) else "chrome"
-    
+
     if(folder == "content") and not(runmode.update_only):
         createNewFile(name,folder)
         print("Done")
         exit(0)
-    
-    tagfile = open("tags.csv")
 
-    tagmap = tagfile.read().lstrip().splitlines()
-    tagfile.close()
+    with open("tags.csv") as tagfile:
+        tagmap = tagfile.read().lstrip().splitlines()
     if runmode.normal and searchFile(tagmap,name):
-        print(name + "exist already")
+        print(f"{name}exist already")
+    elif runmode.normal:
+        exists = createNewFile(name,folder)
+        with open("tags.csv","a") as tagfile:
+            tagfile.write(f"{name}," + ",".join(args) + "\n")
+        createJSON(tagmap,name,args,runmode.update_only)
+    elif runmode.update_only:
+        print("Only update json")
+        createJSON(tagmap,name,args,runmode.update_only)
+    elif runmode.list_tags:
+        print("listing tags...")
+        printCurrentTags(tagmap)
     else:
-        if runmode.normal:
-            exists = createNewFile(name,folder)
-            tagfile = open("tags.csv","a")
-            tagfile.write(name+","+",".join(args)+"\n")
-            tagfile.close()
-            createJSON(tagmap,name,args,runmode.update_only)
-        elif runmode.update_only:
-            print("Only update json")
-            createJSON(tagmap,name,args,runmode.update_only)
-        elif runmode.list_tags:
-            print("listing tags...")
-            printCurrentTags(tagmap)
-        else:
-            print("this shouldn't happen!")
+        print("this shouldn't happen!")
     # print("Done")
     exit(0)
